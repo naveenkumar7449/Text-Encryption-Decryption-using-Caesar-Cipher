@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Text Encryption & Decryption Tool (Caesar + Vigenère)</title>
+  <style>
+    :root{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;margin:0;padding:0}
+    body{background:linear-gradient(135deg,#f6f9ff,#eef7f1);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{width:100%;max-width:820px;background:white;border-radius:12px;box-shadow:0 10px 30px rgba(20,30,60,0.08);padding:20px}
+    h1{margin:0 0 8px;font-size:20px}
+    p.lead{margin:0 0 16px;color:#475569}
+    .row{display:flex;gap:12px}
+    .col{flex:1}
+    label{display:block;font-weight:600;margin-bottom:6px;color:#0f172a}
+    textarea,input,select{width:100%;padding:10px;border-radius:8px;border:1px solid #e6eef6;font-size:14px}
+    textarea{min-height:110px;resize:vertical}
+    .controls{display:flex;gap:8px;margin-top:12px}
+    button{padding:10px 12px;border-radius:8px;border:0;background:#0ea5a4;color:white;font-weight:600;cursor:pointer}
+    button.secondary{background:#64748b}
+    button.ghost{background:transparent;color:#0f172a;border:1px solid #e6eef6}
+    .output{margin-top:14px;padding:12px;background:#f8fafc;border-radius:8px;border:1px dashed #e6eef6;min-height:60px;white-space:pre-wrap}
+    .small{font-size:13px;color:#334155}
+    .hint{margin-top:10px;font-size:13px;color:#64748b}
+    .row.gap-24{gap:24px}
+    .flex-between{display:flex;justify-content:space-between;align-items:center}
+    .btns-right{display:flex;gap:8px}
+    @media(max-width:680px){.row{flex-direction:column}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="flex-between">
+      <div>
+        <h1>Text Encryption & Decryption Tool</h1>
+        <p class="lead">Supports <strong>Caesar Cipher</strong> and <strong>Vigenère Cipher</strong>. Try it in the box below.</p>
+      </div>
+      <div class="small">Simple demo — no data leaves your browser 🔒</div>
+    </div>
+
+    <div style="margin-top:12px">
+      <label for="cipher">Choose Cipher</label>
+      <select id="cipher">
+        <option value="caesar">Caesar Cipher</option>
+        <option value="vigenere">Vigenère Cipher</option>
+      </select>
+    </div>
+
+    <div class="row gap-24" style="margin-top:12px">
+      <div class="col">
+        <label for="plaintext">Text (plaintext / ciphertext)</label>
+        <textarea id="plaintext" placeholder="Type or paste text here...">HELLO</textarea>
+        <div class="hint">Non-alphabet characters are preserved (spaces, punctuation, numbers).</div>
+      </div>
+
+      <div style="width:210px">
+        <label id="key-label" for="key">Numeric key (Caesar)</label>
+        <input id="key" placeholder="3" />
+
+        <div style="margin-top:10px">
+          <label for="mode">Mode</label>
+          <select id="mode">
+            <option value="encrypt">Encrypt</option>
+            <option value="decrypt">Decrypt</option>
+          </select>
+        </div>
+
+        <div class="controls" style="margin-top:12px">
+          <button id="run">Run</button>
+          <button id="swap" class="secondary">Swap</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px" class="flex-between">
+      <div>
+        <div class="small">Output</div>
+        <div id="output" class="output"></div>
+      </div>
+      <div class="btns-right">
+        <button id="copy" class="ghost">Copy</button>
+        <button id="download" class="ghost">Download .txt</button>
+      </div>
+    </div>
+
+    <div style="margin-top:10px" class="hint">Examples: Caesar with key 3 turns <code>HELLO</code> → <code>KHOOR</code>. Vigenère with key <code>KUU</code> turns <code>HELLO</code> → <code>RYFVI</code>.</div>
+  </div>
+
+  <script>
+    // UI elements
+    const cipherSel = document.getElementById('cipher');
+    const keyInput = document.getElementById('key');
+    const keyLabel = document.getElementById('key-label');
+    const plaintext = document.getElementById('plaintext');
+    const modeSel = document.getElementById('mode');
+    const runBtn = document.getElementById('run');
+    const swapBtn = document.getElementById('swap');
+    const output = document.getElementById('output');
+    const copyBtn = document.getElementById('copy');
+    const downloadBtn = document.getElementById('download');
+
+    // change key input placeholder & label depending on cipher
+    function updateKeyUI(){
+      if(cipherSel.value === 'caesar'){
+        keyLabel.textContent = 'Numeric key (Caesar)';
+        keyInput.placeholder = 'e.g., 3';
+        keyInput.type = 'number';
+      } else {
+        keyLabel.textContent = 'Word key (Vigenère)';
+        keyInput.placeholder = 'e.g., KUU or SECRET';
+        keyInput.type = 'text';
+      }
+    }
+    cipherSel.addEventListener('change', updateKeyUI);
+    updateKeyUI();
+
+    // Caesar
+    function caesarEncrypt(text, key){
+      key = ((Number(key) % 26) + 26) % 26; // normalize
+      let out = '';
+      for(let ch of text){
+        if(/[A-Z]/.test(ch)){
+          const base = 'A'.charCodeAt(0);
+          out += String.fromCharCode((ch.charCodeAt(0)-base + key) % 26 + base);
+        } else if(/[a-z]/.test(ch)){
+          const base = 'a'.charCodeAt(0);
+          out += String.fromCharCode((ch.charCodeAt(0)-base + key) % 26 + base);
+        } else {
+          out += ch;
+        }
+      }
+      return out;
+    }
+    function caesarDecrypt(text, key){
+      // decrypt by shifting backward (or forward by 26-key)
+      key = ((Number(key) % 26) + 26) % 26;
+      return caesarEncrypt(text, (26 - key) % 26);
+    }
+
+    // Vigenere
+    function vigenereEncrypt(text, key){
+      key = String(key || '').toLowerCase().replace(/[^a-z]/g,'');
+      if(!key) return 'Error: invalid or empty key';
+      let out = '';
+      let ki = 0;
+      for(let ch of text){
+        if(/[A-Z]/.test(ch) || /[a-z]/.test(ch)){
+          const base = /[A-Z]/.test(ch) ? 'A'.charCodeAt(0) : 'a'.charCodeAt(0);
+          const shift = key.charCodeAt(ki % key.length) - 'a'.charCodeAt(0);
+          out += String.fromCharCode((ch.charCodeAt(0) - base + shift) % 26 + base);
+          ki++;
+        } else {
+          out += ch;
+        }
+      }
+      return out;
+    }
+    function vigenereDecrypt(text, key){
+      key = String(key || '').toLowerCase().replace(/[^a-z]/g,'');
+      if(!key) return 'Error: invalid or empty key';
+      let out = '';
+      let ki = 0;
+      for(let ch of text){
+        if(/[A-Z]/.test(ch) || /[a-z]/.test(ch)){
+          const base = /[A-Z]/.test(ch) ? 'A'.charCodeAt(0) : 'a'.charCodeAt(0);
+          const shift = key.charCodeAt(ki % key.length) - 'a'.charCodeAt(0);
+          out += String.fromCharCode((ch.charCodeAt(0) - base - shift + 26*10) % 26 + base);
+          ki++;
+        } else {
+          out += ch;
+        }
+      }
+      return out;
+    }
+
+    function run(){
+      const method = cipherSel.value;
+      const mode = modeSel.value;
+      const text = plaintext.value || '';
+      const key = keyInput.value;
+      if(!text){ output.textContent = 'Error: Enter some text.'; return; }
+      if(method === 'caesar'){
+        if(key === '' || isNaN(Number(key))){ output.textContent = 'Error: Enter a numeric key for Caesar cipher.'; return; }
+        if(mode === 'encrypt') output.textContent = caesarEncrypt(text, Number(key));
+        else output.textContent = caesarDecrypt(text, Number(key));
+      } else {
+        if(!key || String(key).replace(/[^a-zA-Z]/g,'').length === 0){ output.textContent = 'Error: Enter an alphabetic key for Vigenère cipher.'; return; }
+        if(mode === 'encrypt') output.textContent = vigenereEncrypt(text, key);
+        else output.textContent = vigenereDecrypt(text, key);
+      }
+    }
+
+    runBtn.addEventListener('click', run);
+
+    // swap plaintext and output (useful to decrypt then encrypt)
+    swapBtn.addEventListener('click', ()=>{
+      const t = plaintext.value;
+      plaintext.value = output.textContent || '';
+      output.textContent = t || '';
+    });
+
+    // copy
+    copyBtn.addEventListener('click', ()=>{
+      const txt = output.textContent || '';
+      if(!txt) return;
+      navigator.clipboard.writeText(txt).then(()=>{
+        copyBtn.textContent = 'Copied';
+        setTimeout(()=> copyBtn.textContent = 'Copy',900);
+      }).catch(()=>{ alert('Copy failed — your browser may block clipboard access.'); });
+    });
+
+    // download output as file
+    downloadBtn.addEventListener('click', ()=>{
+      const txt = output.textContent || '';
+      if(!txt) return;
+      const blob = new Blob([txt], {type:'text/plain'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'output.txt';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    // quick demo auto-run on load
+    window.addEventListener('load', ()=>{
+      // prefill example from earlier
+      plaintext.value = 'HELLO';
+      cipherSel.value = 'vigenere';
+      updateKeyUI();
+      keyInput.value = 'KUU';
+      modeSel.value = 'encrypt';
+      run();
+    });
+  </script>
+</body>
+</html>ument.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    // quick demo auto-run on load
+    window.addEventListener('load', ()=>{
+      // prefill example from earlier
+      plaintext.value = 'HELLO';
+      cipherSel.value = 'vigenere';
+      updateKeyUI();
+      keyInput.value = 'KUU';
+      modeSel.value = 'encrypt';
+      run();
+    });
+  </script>
+</body>
+</html>
